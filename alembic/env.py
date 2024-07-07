@@ -25,8 +25,16 @@ fileConfig(config.config_file_name)
 # add your model's MetaData object here
 target_metadata = Base.metadata
 
-# Get the test database URL from the environment variable
-config.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL_TEST'))
+# Get the database URL from the environment variable
+database_url = os.getenv('DATABASE_URL')
+if not database_url:
+    raise ValueError("No DATABASE_URL set for SQLAlchemy engine")
+
+# Ensure the URL uses the correct dialect
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+config.set_main_option('sqlalchemy.url', database_url)
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
