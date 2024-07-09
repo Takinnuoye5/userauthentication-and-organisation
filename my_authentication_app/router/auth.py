@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from my_authentication_app.database import get_db
@@ -14,13 +14,26 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/login", response_model=user_schema.LoginResponse)
-def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    logger.info(f"Login attempt for {form_data.username}")
+async def login_user(request: Request, db: Session = Depends(get_db)):
     try:
-        db_user = auth_service.authenticate_user(form_data.username, form_data.password, db)
+        content_type = request.headers.get("Content-Type")
+        if content_type == "application/x-www-form-urlencoded":
+            form_data = await request.form()
+            username = form_data.get("username")
+            password = form_data.get("password")
+        elif content_type == "application/json":
+            json_data = await request.json()
+            username = json_data.get("email")
+            password = json_data.get("password")
+        else:
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported content type")
+
+        logger.info(f"Login attempt for {username}")
+        db_user = auth_service.authenticate_user(username, password, db)
         if not db_user:
-            logger.error(f"Invalid credentials for {form_data.username}")
+            logger.error(f"Invalid credentials for {username}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        
         token = auth_service.create_access_token({"sub": db_user.email})
         logger.info(f"Created token for {db_user.email}: {token}")
         return {
